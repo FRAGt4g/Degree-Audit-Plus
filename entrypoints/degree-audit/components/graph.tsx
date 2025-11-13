@@ -13,6 +13,11 @@ interface GraphProps {
 	children?: React.ReactNode;
 	bars: Bar[];
 	tooltipContent?: (bar: Bar) => React.ReactNode;
+	size?: number;
+	strokeWidth?: number;
+	gap?: number;
+	startRadius?: number;
+	animationDuration?: number;
 }
 
 const InnerDonutGraph = ({
@@ -103,14 +108,15 @@ const MultiDonutGraph = ({
 	innerContent,
 	children,
 	tooltipContent,
+	size = 362, // Defaulted to 362 because this was the figma design size
+	strokeWidth = 10,
+	gap = 1,
+	startRadius = 95,
+	animationDuration = 750,
 }: GraphProps) => {
+	// State to track the bar that is currently being hovered over. Used in the tooltip functionality.
 	const [hoveredBar, setHoveredBar] = useState<Bar | null>(bars[0] || null);
-	const ref = useRef<HTMLDivElement>(null);
-	const size = 362;
-	const strokeWidth = 10;
-	const gap = 1;
-	const startRadius = 95;
-	const animationDuration = 750;
+	const tooltipRef = useRef<HTMLDivElement>(null);
 
 	// State to track animated progress for each bar
 	const [animatedProgress, setAnimatedProgress] = useState<number[]>(
@@ -121,7 +127,7 @@ const MultiDonutGraph = ({
 		// Animate each bar from 0 to its target value
 		const startTime = Date.now();
 
-		const animate = () => {
+		function animate() {
 			const elapsed = Date.now() - startTime;
 			const progress = Math.min(elapsed / animationDuration, 1);
 
@@ -132,23 +138,24 @@ const MultiDonutGraph = ({
 				bars.map((bar) => bar.percentage.current * easedProgress)
 			);
 
+			// If the animation is not complete, request the next frame
 			if (progress < 1) {
 				requestAnimationFrame(animate);
 			}
-		};
+		}
 
 		requestAnimationFrame(animate);
 	}, [bars]);
 
 	return (
 		<div
-			ref={ref}
 			style={{
 				height: size,
 				aspectRatio: "1",
 				position: "relative",
 			}}
 		>
+			{/* To allow for animation of the tooltip box when it disappears */}
 			<AnimatePresence>
 				{hoveredBar && (
 					<>
@@ -157,12 +164,13 @@ const MultiDonutGraph = ({
 							animate={{ opacity: 1, right: 0 }}
 							exit={{ opacity: 0, right: -10 }}
 							transition={{ duration: 0.2 }}
+							ref={tooltipRef}
 							style={{
 								position: "absolute",
 								top: 0,
 								right: 0,
 								zIndex: 1000,
-								transform: "translate(100%, -50%)",
+								transform: "translate(100%, 0%)",
 							}}
 						>
 							{tooltipContent?.(hoveredBar)}
@@ -190,36 +198,30 @@ const MultiDonutGraph = ({
 								}}
 							>
 								{(() => {
-									// Parameters used in donut placement
-									const svgSize = typeof size === "number" ? size : 200;
-									const tooltipBoxX = svgSize; // tooltip is placed at right edge
-									const tooltipBoxY = 0; // tooltip box is at top
-
 									// Find the hovered bar index and its geometry
 									const index = bars.findIndex((bar) => bar === hoveredBar);
 
-									// const radius =
-									// 	size / 2 - Math.sqrt(2) * (strokeWidth + gap) * index;
-									// const displacement = radius / Math.sqrt(2);
 									const displacement =
 										size / 2 - (strokeWidth + gap) * 2 * index;
+									const tooltipBoxHeight =
+										tooltipRef.current?.clientHeight || 100;
 
 									// The center of the circle
-									const cx = svgSize / 2;
-									const cy = svgSize / 2;
+									const cx = size / 2;
+									const cy = size / 2;
 
 									return (
 										<line
-											x1={cx + size / 2}
-											y1={cy - size / 2}
-											x2={cx + displacement / Math.sqrt(2)}
-											y2={cy - displacement / Math.sqrt(2)}
+											x1={cx + size / 2} // The left edge of the tooltip box
+											y1={cy - size / 2 + tooltipBoxHeight / 2} // The middle of the tooltip box
+											x2={cx + displacement / Math.sqrt(2)} // About the outside edge of the circle intersecting y=x (straight diagonal line to the right)
+											y2={cy - displacement / Math.sqrt(2)} // About the outside edge of the circle intersecting y=x (straight diagonal line to the right)
 											stroke={hoveredBar?.color || "#000"}
 											strokeWidth={4}
 											strokeLinecap="round"
 											strokeDasharray="5,5"
 											style={{
-												zIndex: 800,
+												zIndex: 50,
 												pointerEvents: "none",
 											}}
 										/>
@@ -230,6 +232,8 @@ const MultiDonutGraph = ({
 					</>
 				)}
 			</AnimatePresence>
+
+			{/* The actual concentric radial graphs */}
 			{bars.map((bar, index) => {
 				return (
 					<InnerDonutGraph
@@ -245,6 +249,8 @@ const MultiDonutGraph = ({
 					/>
 				);
 			})}
+
+			{/* The arbitrary inner content to be shown inside the donut graph */}
 			{(innerContent || children) && (
 				<div
 					style={{
