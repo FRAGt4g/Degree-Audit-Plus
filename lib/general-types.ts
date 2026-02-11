@@ -18,7 +18,7 @@ export type CourseRowData = {
 	uniqueNumber?: string;
 	semester: string;
 	grade?: string;
-	hours?: number;
+	hours: number;
 	status: CourseStatus;
 };
 
